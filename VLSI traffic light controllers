@@ -1,0 +1,144 @@
+module traffic_controller (
+    input  wire clk,
+    input  wire reset,
+
+    output reg north_red,
+    output reg north_yellow,
+    output reg north_green,
+
+    output reg east_red,
+    output reg east_yellow,
+    output reg east_green
+);
+
+    // FSM states
+    localparam NS_GREEN = 2'b00;
+    localparam NS_YELLOW = 2'b01;
+    localparam EW_GREEN = 2'b10;
+    localparam EW_YELLOW = 2'b11;
+
+    reg [1:0] state;
+
+    // Clock divider / timer
+    reg [31:0] counter;
+
+    // Change this value according to your FPGA clock.
+    // For a 100 MHz clock:
+    // 100,000,000 clock cycles = 1 second.
+    localparam ONE_SECOND = 32'd100_000_000;
+
+    // Timing
+    localparam GREEN_TIME  = 10;
+    localparam YELLOW_TIME = 3;
+
+    reg [4:0] seconds;
+
+    // State register and timer
+    always @(posedge clk or posedge reset) begin
+        if (reset) begin
+            state   <= NS_GREEN;
+            counter <= 0;
+            seconds <= 0;
+        end
+        else begin
+            if (counter >= ONE_SECOND - 1) begin
+                counter <= 0;
+
+                case (state)
+
+                    NS_GREEN: begin
+                        if (seconds >= GREEN_TIME - 1) begin
+                            state   <= NS_YELLOW;
+                            seconds <= 0;
+                        end
+                        else begin
+                            seconds <= seconds + 1;
+                        end
+                    end
+
+                    NS_YELLOW: begin
+                        if (seconds >= YELLOW_TIME - 1) begin
+                            state   <= EW_GREEN;
+                            seconds <= 0;
+                        end
+                        else begin
+                            seconds <= seconds + 1;
+                        end
+                    end
+
+                    EW_GREEN: begin
+                        if (seconds >= GREEN_TIME - 1) begin
+                            state   <= EW_YELLOW;
+                            seconds <= 0;
+                        end
+                        else begin
+                            seconds <= seconds + 1;
+                        end
+                    end
+
+                    EW_YELLOW: begin
+                        if (seconds >= YELLOW_TIME - 1) begin
+                            state   <= NS_GREEN;
+                            seconds <= 0;
+                        end
+                        else begin
+                            seconds <= seconds + 1;
+                        end
+                    end
+
+                    default: begin
+                        state   <= NS_GREEN;
+                        seconds <= 0;
+                    end
+
+                endcase
+            end
+            else begin
+                counter <= counter + 1;
+            end
+        end
+    end
+
+    // Output logic
+    always @(*) begin
+
+        // Default: all RED
+        north_red    = 1'b1;
+        north_yellow = 1'b0;
+        north_green  = 1'b0;
+
+        east_red     = 1'b1;
+        east_yellow  = 1'b0;
+        east_green   = 1'b0;
+
+        case (state)
+
+            NS_GREEN: begin
+                north_red   = 1'b0;
+                north_green = 1'b1;
+            end
+
+            NS_YELLOW: begin
+                north_red    = 1'b0;
+                north_yellow = 1'b1;
+            end
+
+            EW_GREEN: begin
+                east_red   = 1'b0;
+                east_green = 1'b1;
+            end
+
+            EW_YELLOW: begin
+                east_red    = 1'b0;
+                east_yellow = 1'b1;
+            end
+
+            default: begin
+                north_red = 1'b1;
+                east_red  = 1'b1;
+            end
+
+        endcase
+    end
+
+endmodule
